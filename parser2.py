@@ -5,11 +5,42 @@
     # Llaman recursivamente a otras funciones si encuentran un no terminal.
     # Retornan True o False para indicar si la regla se cumple para la cadena actual.
 
+class Error:
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
+
+
 
 class Parser:
     def __init__(self, input_string):
         self.input_string = input_string
         self.index = 0  # Para rastrear la posición actual en la cadena
+
+
+    def handleErrorMatrizName(self):
+        actual_char = self.current_char()
+        if self.Let() or self.Dig():
+            return Error("No pueden venir letras y digitos despues de guiones seguidos")
+        if(self.current_char() == ']' or self.current_char() == ','):
+            return Error(f"No pueden venir un {actual_char} despues de guiones seguidos")
+        return Error(f"El caracter {actual_char} no esta en el alfabeto")
+    
+    def handleErrorID(self):
+        actual_char = self.current_char()
+        if actual_char == ']':
+            return Error("No puede cerrar con ], todavia no definio los dos identificadores")
+        if self.Let() or self.Dig():
+            return Error(f"No pueden venir un {actual_char}")
+        if(actual_char == ','):
+            return Error(f"No pueden haber dos , dentro de la declaracion")
+        if actual_char == '[':
+            return Error("La declaracion de la matriz ya fue abierta")
+        return Error(f"El caracter {actual_char} no esta en el alfabeto")
+    
 
     def current_char(self):
         # Devuelve el carácter actual o None si se alcanzó el final
@@ -22,13 +53,19 @@ class Parser:
 
     def parse(self):
         # Punto de entrada para el análisis
-        return self.S() and self.index == len(self.input_string)
+        result = self.S()
+        if isinstance(result, Error):  # Si es un error, lo devolvemos
+            return result
+        # Verificamos si se consumió toda la cadena
+        if self.index == len(self.input_string):
+            return True
+        return Error("La cadena no se consumió completamente.")
 
     # Producciones de la gramática
     def S(self):
         if self.Let():
             return self.A()
-        return False
+        return Error("La cadena debe comenzar con una letra.")
 
     def A(self):
         char = self.current_char()
@@ -40,7 +77,8 @@ class Parser:
         elif char == '[':
             self.consume()
             return self.X()
-        return False
+        else:
+            return Error(f"El caracter {char} no esta en el alfabeto")
 
     def B(self):
         char = self.current_char()
@@ -48,11 +86,12 @@ class Parser:
             return self.A()
         elif char == '_':
             self.consume()
-            return self.C()
+            return self.C()    #aa__
         elif char == '[':
             self.consume()
             return self.E()
-        return False
+        else:
+            return Error(f"El caracter {char} no esta en el alfabeto")
 
     def C(self):
         char = self.current_char()
@@ -62,7 +101,7 @@ class Parser:
         elif char == '[':
             self.consume()
             return self.X()
-        return False
+        return self.handleErrorMatrizName()
 
     def D(self):
         char = self.current_char()
@@ -72,12 +111,13 @@ class Parser:
         elif char == '[':
             self.consume()
             return self.E()
-        return False
+        return self.handleErrorMatrizName()
+
 
     def E(self):
         if self.Dig():
             return self.F()
-        return False
+        return self.handleErrorID()
 
     def F(self):
         char = self.current_char()
@@ -86,12 +126,12 @@ class Parser:
         elif char == ',':
             self.consume()
             return self.G()
-        return True  # Permitir vacío
+        return Error(f"En caso impar, solo puede venir una , o digitos")
 
     def G(self):
         if self.Dig():
             return self.H()
-        return False
+        return self.handleErrorID()
 
     def H(self):
         char = self.current_char()
@@ -100,12 +140,12 @@ class Parser:
         elif char == ']':
             self.consume()
             return self.P()
-        return False
+        return self.handleErrorID()
 
     def X(self):
         if self.Let():
             return self.J()
-        return False
+        return Error("Caso par, la definicion de los identificadores debe seguir el mismo patron que el nombre de la matriz")
 
     def J(self):
         char = self.current_char()
@@ -117,7 +157,7 @@ class Parser:
         elif char == ',':
             self.consume()
             return self.M()
-        return False
+        return self.handleErrorID()
 
     def K(self):
         char = self.current_char()
@@ -129,7 +169,7 @@ class Parser:
         elif char == ',':
             self.consume()
             return self.M()
-        return False
+        return self.handleErrorID()
 
     def L(self):
         char = self.current_char()
@@ -139,12 +179,12 @@ class Parser:
         elif char == ',':
             self.consume()
             return self.M()
-        return False
+        return self.handleErrorID()
 
     def M(self):
         if self.Let():
             return self.N()
-        return False
+        return self.handleErrorID()
 
     def N(self):
         char = self.current_char()
@@ -156,7 +196,7 @@ class Parser:
         elif char == ']':
             self.consume()
             return self.P()
-        return False
+        return self.handleErrorID()
 
     def Ñ(self):
         char = self.current_char()
@@ -168,7 +208,7 @@ class Parser:
         elif char == ']':
             self.consume()
             return self.P()
-        return False
+        return self.handleErrorID()
 
     def O(self):
         char = self.current_char()
@@ -178,7 +218,7 @@ class Parser:
         elif char == ']':
             self.consume()
             return self.P()
-        return False
+        return self.handleErrorID()
 
     def P(self):
         return True  # 𝜆 significa vacío
@@ -190,7 +230,6 @@ class Parser:
         if char and char.isalpha():
             self.consume()
             return True
-        return False
 
     def Dig(self):
         # Devuelve True si el carácter actual es un dígito (0-9)
@@ -203,12 +242,24 @@ class Parser:
 # Pruebas
 if __name__ == "__main__":
     test_strings = [
+        "l?t_dig_[123,456]",
         "let_dig_[123,456]",  # Cadena válida
-        "abc123[a1,a2]",       # Cadena válida
-        "a1_[123]",             # Cadena válida
-        "_123",                 # Cadena inválida
-        "let[[123_456]]",       # Cadena inválida
+        "abc123[a1,a2]",      # Cadena válida
+        "a1_[123,123]",       # Cadena válida
+        "a1__[a1_,a1_]",      # Cadena válida      
+        "_123",               # Cadena inválida
+        "let[[123_456]]",     # Cadena inválida
+        "leta__,_[111,111]",
+        "l1l1l_1__[1,111]",
+        "l1l1l_1__[aa__a,aa_]",
+        "l1l1l_1__[aa__,a,a_]",
+        "a1_[12[3,123]",
+        "a1_[1"
     ]
     for s in test_strings:
         parser = Parser(s)
-        print(f"'{s}': {'Cadena válida' if parser.parse() else 'Cadena inválida'}")
+        result = parser.parse()
+        if isinstance(result, Error):  # Si es un error, mostramos su mensaje
+            print(f"'{s}': Cadena inválida - {result}")
+        else:  # Si no, validamos la cadena como antes
+            print(f"'{s}': {'Cadena válida' if result else 'Cadena inválida'}")
